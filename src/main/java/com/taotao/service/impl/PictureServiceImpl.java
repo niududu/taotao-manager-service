@@ -1,13 +1,18 @@
 package com.taotao.service.impl;
 
-import org.apache.ibatis.reflection.ExceptionUtil;
+import java.io.File;
+
 import org.joda.time.DateTime;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
-import com.taotao.common.pojo.PictureResult;
+import com.aliyun.oss.OSSClient;
+import com.taotao.result.PictureResult;
 import com.taotao.service.PictureService;
+import com.taotao.utils.ExceptionUtil;
+import com.taotao.utils.IDUtils;
+import com.taotao.utils.OssUtil;
 
 /**
  * 上传图片处理服务实现类
@@ -21,18 +26,10 @@ import com.taotao.service.PictureService;
 @Service
 public class PictureServiceImpl implements PictureService {
 	
-	@Value("${FTP_ADDRESS}")
-	private String FTP_ADDRESS;
-	@Value("${FTP_PORT}")
-	private Integer FTP_PORT;
-	@Value("${FTP_USER_NAME}")
-	private String FTP_USER_NAME;
-	@Value("${FTP_PASSWORD}")
-	private String FTP_PASSWORD;
-	@Value("${FTP_BASE_PATH}")
-	private String FTP_BASE_PATH;
-	@Value("${IMAGE_BASE_URL}")
-	private String IMAGE_BASE_URL;
+	private static String endpoint="oss-cn-shenzhen.aliyuncs.com";
+	private static String accessKeyId="LTAIfTVYN8w5mmi1";
+	private static String accessKeySecret="fDLgyulAXElgA8IZXPuosidGbnvP4f";
+	private static String bucketName="niuniu-test";
 	
 
 	@Override
@@ -42,28 +39,20 @@ public class PictureServiceImpl implements PictureService {
 			return PictureResult.error("上传图片为空");
 		}
 		//取文件扩展名
-		String originalFilename = uploadFile.getOriginalFilename();
-		String ext = originalFilename.substring(originalFilename.lastIndexOf("."));
-		//生成新文件名
-		//可以使用uuid生成新文件名。
-		//UUID.randomUUID()
-		//可以是时间+随机数生成文件名
-		String imageName = IDUtils.genImageName();
-		//把图片上传到ftp服务器（图片服务器）
-		//需要把ftp的参数配置到配置文件中
-		//文件在服务器的存放路径，应该使用日期分隔的目录结构
-		DateTime dateTime = new DateTime();
-		String filePath = dateTime.toString("/yyyy/MM/dd");
+				String originalFilename = uploadFile.getOriginalFilename();
+				String ext = originalFilename.substring(originalFilename.lastIndexOf("."));
+				 String fileKey = IDUtils.genImageName();
 		try {
-			FtpUtil.uploadFile(FTP_ADDRESS, FTP_PORT, FTP_USER_NAME, FTP_PASSWORD, 
-					FTP_BASE_PATH, filePath, imageName + ext, uploadFile.getInputStream());
+			OSSClient ossClient=new OSSClient(endpoint, accessKeyId, accessKeySecret);
+			OssUtil.bucketReadPublic(ossClient, bucketName);
+			OssUtil.upload(ossClient, bucketName, fileKey+ext,uploadFile.getInputStream());
 		} catch (Exception e) {
 			e.printStackTrace();
 			return PictureResult.error(ExceptionUtil.getStackTrace(e));
 		}
 		//返回结果，生成一个可以访问到图片的url返回
-		
-		return PictureResult.ok(IMAGE_BASE_URL + filePath + "/" + imageName + ext);
+		String url="http://"+bucketName+"."+endpoint+"/"+fileKey+ext;
+		return PictureResult.ok(url);
 	}
 
 }
